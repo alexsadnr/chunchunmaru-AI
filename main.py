@@ -14,9 +14,16 @@ import copy
 sns.set(style='whitegrid')
 plt.rcParams['figure.figsize'] = (14, 8)
 
-# Индификация устройства с cuda ядрами
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"Используемое устройство: {device}")
+# Индификация устройства с cuda ядрами (предпочитаем GPU)
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+if torch.cuda.is_available():
+    device = torch.device('cuda:0')
+    torch.backends.cudnn.benchmark = True
+    print(f"Используемое устройство: {device} ({torch.cuda.get_device_name(0)}, CUDA {torch.version.cuda})")
+else:
+    device = torch.device('cpu')
+    print("⚠️ CUDA не обнаружена, используется CPU. Установите PyTorch с поддержкой CUDA (например, pip install torch --index-url https://download.pytorch.org/whl/cu121) и убедитесь, что драйверы для 4060 актуальны.")
+    ### Не работает с rtx 4060, даже с устоновленым cuda
 
 # Семинар
 
