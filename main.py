@@ -52,24 +52,24 @@ def ema(y, alpha=0.2):
 # CELL_1
 
 
-aqua_data = pd.read_csv('aqua_data.csv')
-darkness_data = pd.read_csv('darkness_data.csv')
+train_data = pd.read_csv('train_data.csv')
+test_data = pd.read_csv('test_data.csv')
 
 # Работа с временным индексом и базовый EDA
 
-aqua_data['timestamp'] = pd.to_datetime(aqua_data['timestamp'])
-aqua_data = aqua_data.sort_values('timestamp').reset_index(drop=True)
+train_data['timestamp'] = pd.to_datetime(train_data['timestamp'])
+train_data = train_data.sort_values('timestamp').reset_index(drop=True)
 
-darkness_data['timestamp'] = pd.to_datetime(darkness_data['timestamp'])
-darkness_data = darkness_data.sort_values('timestamp').reset_index(drop=True)
+test_data['timestamp'] = pd.to_datetime(test_data['timestamp'])
+test_data = test_data.sort_values('timestamp').reset_index(drop=True)
 
-print("Train shape:", aqua_data.shape)
-print("Test shape:", darkness_data.shape)
-print("\nTrain columns:", aqua_data.columns.tolist())
+print("Train shape:", train_data.shape)
+print("Test shape:", test_data.shape)
+print("\nTrain columns:", train_data.columns.tolist())
 print("\nПропуски в train (top 20):")
-print(aqua_data.isnull().sum().sort_values(ascending=False).head(20))
+print(train_data.isnull().sum().sort_values(ascending=False).head(20))
 print("\nПропуски в test (top 20):")
-print(darkness_data.isnull().sum().sort_values(ascending=False).head(20))
+print(test_data.isnull().sum().sort_values(ascending=False).head(20))
 
 
 # Обработка аномалий и пропусков отдельно для train и test
@@ -96,31 +96,31 @@ def preprocess_continuous_block(df, continuous_cols):
 
 # New logic (OK!)
 
-nim_col = aqua_data.select_dtypes(include=np.number).columns
+nim_col = train_data.select_dtypes(include=np.number).columns
 bin_col = [
     col for col in nim_col
-    if aqua_data[col].nunique() == 2
-    and aqua_data[col].min() == 0
-    and aqua_data[col].max() == 1
+    if train_data[col].nunique() == 2
+    and train_data[col].min() == 0
+    and train_data[col].max() == 1
 ]
 
 con_col = [col for col in nim_col if col not in bin_col]
 print("\nНепрерывные признаки в train:", con_col)
-aqua_data = preprocess_continuous_block(aqua_data, con_col)
+train_data = preprocess_continuous_block(train_data, con_col)
 
-num_col = darkness_data.select_dtypes(include=np.number).columns
+num_col = test_data.select_dtypes(include=np.number).columns
 binary_cols_test = [
     col for col in num_col
-    if darkness_data[col].nunique() == 2
-    and darkness_data[col].min() == 0
-    and darkness_data[col].max() == 1
+    if test_data[col].nunique() == 2
+    and test_data[col].min() == 0
+    and test_data[col].max() == 1
 ]
 con_cols_1 = [col for col in num_col if col not in binary_cols_test]
 print("\nНепрерывные признаки в test:", con_cols_1)
-darkness_data = preprocess_continuous_block(darkness_data, con_cols_1)
+test_data = preprocess_continuous_block(test_data, con_cols_1)
 
-print("\nВсего пропусков после обработки train:", aqua_data.isnull().sum().sum())
-print("Всего пропусков после обработки test:", darkness_data.isnull().sum().sum())
+print("\nВсего пропусков после обработки train:", train_data.isnull().sum().sum())
+print("Всего пропусков после обработки test:", test_data.isnull().sum().sum())
 
 # CELL_2
 
@@ -131,40 +131,40 @@ BATCH_SIZE = 128
 target_col = 'Light_Kitchen'
 id_col = 'ID'
 
-megumin_features = [
-    c for c in aqua_data.columns
+feature_cols = [
+    c for c in train_data.columns
     if c not in [target_col, 'timestamp'] and not c.endswith('_old')
 ]
 
-megumin_features_test = [
-    c for c in darkness_data.columns
+feature_cols_test = [
+    c for c in test_data.columns
     if c not in [id_col, 'timestamp'] and not c.endswith('_old')
 ]
 
-print("\nПризнаки train:", megumin_features)
-print("Признаки test:", megumin_features_test)
+print("\nПризнаки train:", feature_cols)
+print("Признаки test:", feature_cols_test)
 
 # Нормализация по train
 
 scaler = MinMaxScaler()
-aqua_features = aqua_data[megumin_features].copy()
-darkness_features = darkness_data[megumin_features_test].copy()
+train_features = train_data[feature_cols].copy()
+test_features = test_data[feature_cols_test].copy()
 
-scaler.fit(aqua_features.values)
+scaler.fit(train_features.values)
 
-aqua_features_scaled = pd.DataFrame(
-    scaler.transform(aqua_features.values),
-    columns=megumin_features,
-    index=aqua_data.index
+train_features_scaled = pd.DataFrame(
+    scaler.transform(train_features.values),
+    columns=feature_cols,
+    index=train_data.index
 )
 
-darkness_features_scaled = pd.DataFrame(
-    scaler.transform(darkness_features.values),
-    columns=megumin_features_test,
-    index=darkness_data.index
+test_features_scaled = pd.DataFrame(
+    scaler.transform(test_features.values),
+    columns=feature_cols_test,
+    index=test_data.index
 )
 
-y_full = aqua_data[target_col].astype(float).values
+y_full = train_data[target_col].astype(float).values
 
 # CELL_3
 
@@ -184,7 +184,7 @@ SEQ_LENGTH_BIN = 120  # Смотрим на 2 минуты истории
 # Нарезаем последовательности для всей обучающей истории
 
 X_all, y_all = create_sequences_binary(
-    aqua_features_scaled.values,
+    train_features_scaled.values,
     SEQ_LENGTH_BIN,
     y_full
 )
@@ -355,34 +355,34 @@ print(f"\nВсего реальных событий 'Включен': {np.sum(t
 print(f"Всего предсказано событий 'Включен': {np.sum(preds_val)}")
 
 # CELL_6 Подготовка данных
-party_df = pd.concat(
+full_df = pd.concat(
     [
-        aqua_features_scaled.assign(timestamp=aqua_data['timestamp'], is_test=False),
-        darkness_features_scaled.assign(timestamp=darkness_data['timestamp'], is_test=True),
+        train_features_scaled.assign(timestamp=train_data['timestamp'], is_test=False),
+        test_features_scaled.assign(timestamp=test_data['timestamp'], is_test=True),
     ],
     axis=0
 ).sort_values('timestamp', kind='mergesort').reset_index(drop=True)
-party_array = party_df[megumin_features].values
-darkness_positions = party_df.index[party_df['is_test']].to_numpy()
+full_array = full_df[feature_cols].values
+test_positions = full_df.index[full_df['is_test']].to_numpy()
 X_test_sequences = []
 valid_mask = []
 
-for pos in darkness_positions:
+for pos in test_positions:
     start = pos - SEQ_LENGTH_BIN
     if start < 0:
         valid_mask.append(False)
         X_test_sequences.append(
-            np.zeros((SEQ_LENGTH_BIN, party_array.shape[1]), dtype=np.float32)
+            np.zeros((SEQ_LENGTH_BIN, full_array.shape[1]), dtype=np.float32)
         )
     else:
-        seq = party_array[start:pos, :]
+        seq = full_array[start:pos, :]
         if seq.shape[0] == SEQ_LENGTH_BIN:
             valid_mask.append(True)
             X_test_sequences.append(seq.astype(np.float32))
         else:
             valid_mask.append(False)
             X_test_sequences.append(
-                np.zeros((SEQ_LENGTH_BIN, party_array.shape[1]), dtype=np.float32)
+                np.zeros((SEQ_LENGTH_BIN, full_array.shape[1]), dtype=np.float32)
             )
 
 X_test_sequences = np.stack(X_test_sequences, axis=0)
@@ -411,9 +411,9 @@ test_preds = (test_probs_filled > 0.5).astype(int)
 
 # CELL_8
 
-if 'ID' in darkness_data.columns:
+if 'ID' in test_data.columns:
     submission = pd.DataFrame({
-        'ID': darkness_data['ID'].values,
+        'ID': test_data['ID'].values,
         'Light_Kitchen': test_preds.astype(int)
     })
 else:
